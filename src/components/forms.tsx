@@ -1508,7 +1508,7 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
                 <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h3 className="font-semibold text-[var(--foreground)]">{item.productCode} - {item.productName}</h3>
-                    <p className="text-xs text-[var(--ink-soft)]">系统已按允收日最早批次分配；正常直接保存，需要改批次时再展开调整。</p>
+                    <p className="text-xs text-[var(--ink-soft)]">已默认选中一批出库批次；可直接修改数量，也可以展开选择其它批次。</p>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">
                       <span className="rounded-full bg-[#e3efe9] px-2 py-1 font-semibold text-[var(--leaf)]">应出 {item.quantity}</span>
                       <span className="rounded-full bg-[#e3efe9] px-2 py-1 font-semibold text-[var(--leaf)]">已分配 {allocated}</span>
@@ -1521,7 +1521,7 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
                       type="button"
                       onClick={() => setExpandedProducts((current) => ({ ...current, [item.productId]: !expanded }))}
                     >
-                      {expanded ? "收起未选批次" : `显示其它批次 ${itemBatches.length - visibleBatches.length}`}
+                      {expanded ? "收起其它批次" : `选择其它批次 ${itemBatches.length - visibleBatches.length}`}
                     </button>
                   ) : null}
                 </div>
