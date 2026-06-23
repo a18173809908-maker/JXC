@@ -56,6 +56,8 @@ type ShippableOrder = {
     quantity: number;
     orderedQuantity: number;
     shippedQuantity: number;
+    unitPrice: number;
+    validDeliveryDate: string;
   }>;
 };
 
@@ -1497,6 +1499,31 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
       </div>
       {selectedOrder ? (
         <div className="grid gap-4">
+          <div className="rounded-md border border-[var(--line)] bg-white p-3">
+            <h3 className="mb-3 font-semibold text-[var(--foreground)]">订单商品</h3>
+            <div className="overflow-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="text-xs text-[var(--ink-soft)]">
+                  <tr>
+                    <th className="py-2">商品</th>
+                    <th className="py-2">订单数量</th>
+                    <th className="py-2">单价</th>
+                    <th className="py-2">有效送货日</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--line)]">
+                  {selectedOrder.items.map((item) => (
+                    <tr key={item.productId}>
+                      <td className="py-2 font-medium">{item.productCode} - {item.productName}</td>
+                      <td className="py-2">{item.orderedQuantity}</td>
+                      <td className="py-2">¥{item.unitPrice.toFixed(2)}</td>
+                      <td className="py-2">{item.validDeliveryDate}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
           {selectedOrder.items.map((item) => {
             const itemBatches = batches.filter((batch) => batch.productId === item.productId && batch.currentQuantity > 0);
             const allocated = allocatedQuantity(item.productId);

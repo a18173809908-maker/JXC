@@ -1125,6 +1125,8 @@ export default async function Home({ searchParams }: { searchParams?: Promise<Se
             quantity: item.quantity,
             orderedQuantity: item.quantity,
             shippedQuantity: 0,
+            unitPrice: Number(item.unitPrice),
+            validDeliveryDate: formatDate(item.validDeliveryDate),
           }))
           .filter((item) => item.quantity > 0),
       };
