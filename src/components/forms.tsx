@@ -1640,29 +1640,35 @@ export function ExchangeForm({
   const lockedReturnRows = Boolean(initialReturnRows?.length);
   const initialReturnedProductIds = new Set(initialReturnRows?.map((row) => row.productId) ?? []);
   const firstOutProduct = products.find((product) => !initialReturnedProductIds.has(product.id));
+  function firstBatchForProduct(productId: string, availableOnly = false) {
+    return batches.find((batch) => batch.productId === productId && (!availableOnly || batch.currentQuantity > 0))?.id ?? "";
+  }
   const [returnRows, setReturnRows] = useState<Array<{ productId: string; stockBatchId: string; quantity: number }>>(
-    initialReturnRows?.map((row) => ({ productId: row.productId, stockBatchId: row.stockBatchId, quantity: row.quantity ?? 0 })) ?? [],
+    initialReturnRows?.map((row) => ({ productId: row.productId, stockBatchId: row.stockBatchId || firstBatchForProduct(row.productId), quantity: row.quantity ?? 0 })) ?? [],
   );
   const [outRows, setOutRows] = useState<Array<{ productId: string; stockBatchId: string; quantity: number; unitPrice: number }>>(
-    initialReturnRows?.map(() => ({ productId: firstOutProduct?.id ?? "", stockBatchId: "", quantity: 0, unitPrice: 0 })) ?? [],
+    initialReturnRows?.map(() => ({ productId: firstOutProduct?.id ?? "", stockBatchId: firstBatchForProduct(firstOutProduct?.id ?? "", true), quantity: 0, unitPrice: 0 })) ?? [],
   );
   const returnedProductIds = useMemo(() => new Set(returnRows.map((row) => row.productId).filter(Boolean)), [returnRows]);
   const outProductOptions = products.filter((product) => !returnedProductIds.has(product.id));
 
   function addReturnRow() {
-    setReturnRows((current) => [...current, { productId: products[0]?.id ?? "", stockBatchId: "", quantity: 0 }]);
+    const productId = products[0]?.id ?? "";
+    setReturnRows((current) => [...current, { productId, stockBatchId: firstBatchForProduct(productId), quantity: 0 }]);
   }
   function addOutRow() {
-    setOutRows((current) => [...current, { productId: outProductOptions[0]?.id ?? "", stockBatchId: "", quantity: 0, unitPrice: 0 }]);
+    const productId = outProductOptions[0]?.id ?? "";
+    setOutRows((current) => [...current, { productId, stockBatchId: firstBatchForProduct(productId, true), quantity: 0, unitPrice: 0 }]);
   }
   function updateReturnRow(index: number, patch: Partial<{ productId: string; stockBatchId: string; quantity: number }>) {
-    setReturnRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch, stockBatchId: patch.productId !== undefined ? "" : row.stockBatchId } : row)));
+    setReturnRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch, stockBatchId: patch.productId !== undefined ? firstBatchForProduct(patch.productId) : row.stockBatchId } : row)));
   }
   function updateOutRow(index: number, patch: Partial<{ productId: string; stockBatchId: string; quantity: number; unitPrice: number }>) {
     setOutRows((current) => {
       const next = [...current];
-      while (next.length <= index) next.push({ productId: outProductOptions[0]?.id ?? "", stockBatchId: "", quantity: 0, unitPrice: 0 });
-      return next.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch, stockBatchId: patch.productId !== undefined ? "" : row.stockBatchId } : row));
+      const fallbackProductId = outProductOptions[0]?.id ?? "";
+      while (next.length <= index) next.push({ productId: fallbackProductId, stockBatchId: firstBatchForProduct(fallbackProductId, true), quantity: 0, unitPrice: 0 });
+      return next.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch, stockBatchId: patch.productId !== undefined ? firstBatchForProduct(patch.productId, true) : row.stockBatchId } : row));
     });
   }
   function removeReturnRow(index: number) {

@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "食品进销存",
   description: "面向便利店供货的食品进销存系统",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
