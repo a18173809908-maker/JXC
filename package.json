@@ -1,0 +1,52 @@
+{
+  "name": "jxc",
+  "version": "1.0.0",
+  "description": "食品类进销存系统",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:dev": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "keywords": [
+    "inventory",
+    "postgresql",
+    "jxc"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "type": "module",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.21.0",
+    "next": "^16.2.9",
+    "pg": "^8.22.0",
+    "prisma": "^7.8.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
+    "@types/node": "^26.0.0",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.9",
+    "tailwindcss": "^4.3.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}

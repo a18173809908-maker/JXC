@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIAL
+  COMPLETED
+  CANCELLED
+}
+
+enum MovementType {
+  PURCHASE_IN
+  INITIAL_STOCK
+  SALES_OUT
+  SALES_RETURN
+  EXCHANGE_IN
+  EXCHANGE_OUT
+  ADJUSTMENT
+}
+
+enum BatchSource {
+  PURCHASE
+  INITIAL
+}
+
+enum OutboundStatus {
+  DRAFT
+  CONFIRMED
+}
+
+enum ReturnStatus {
+  PENDING
+  RECEIVED
+}
+
+enum ExchangeInboundStatus {
+  PENDING
+  RECEIVED
+}
+
+enum ExchangeOutboundStatus {
+  PENDING
+  SHIPPED
+}
+
+model Product {
+  id             String              @id @default(cuid())
+  code           String              @unique
+  name           String
+  spec           String
+  unit           String              @default("包")
+  barcode        String?
+  category       String?
+  shelfLifeDays  Int                 @default(180)
+  minStock       Int                 @default(0)
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  purchaseItems  PurchaseOrderItem[]
+  salesItems     SalesOrderItem[]
+  outboundItems  OutboundOrderItem[]
+  returnItems    ReturnOrderItem[]
+  externalCodes  ProductExternalCode[]
+  exchangeReturnItems ExchangeReturnItem[]
+  exchangeOutItems    ExchangeOutItem[]
+  stockBatches   StockBatch[]
+  stockMovements StockMovement[]
+}
+
+model Customer {
+  id          String          @id @default(cuid())
+  code        String          @unique
+  name        String
+  contact     String?
+  phone       String?
+  address     String?
+  paymentNote String?
+  remark      String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  salesOrders SalesOrder[]
+  outbounds   OutboundOrder[]
+  returns     ReturnOrder[]
+  exchanges   ExchangeOrder[]
+  externalCodes ProductExternalCode[]
+}
+
+model Supplier {
+  id             String          @id @default(cuid())
+  code           String          @unique
+  name           String
+  contact        String?
+  phone          String?
+  address        String?
+  remark         String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id         String              @id @default(cuid())
+  orderNo    String              @unique
+  supplierId String
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  orderDate  DateTime            @default(now())
+  remark     String?
+  createdAt  DateTime            @default(now())
+  items      PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  batchNo         String
+  productionDate  DateTime?
+  expiryDate      DateTime
+  quantity        Int
+  unitPrice       Decimal       @db.Decimal(12, 2)
+  stockBatch      StockBatch?
+}
+
+model SalesOrder {
+  id           String           @id @default(cuid())
+  orderNo      String           @unique
+  customerId   String
+  customer     Customer         @relation(fields: [customerId], references: [id])
+  orderDate    DateTime         @default(now())
+  deliveryDate DateTime?
+  status       OrderStatus      @default(CONFIRMED)
+  remark       String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  items        SalesOrderItem[]
+  outbounds    OutboundOrder[]
+  exchanges    ExchangeOrder[]
+}
+
+model SalesOrderItem {
+  id           String     @id @default(cuid())
+  salesOrderId String
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id])
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id])
+  quantity     Int
+  unitPrice    Decimal    @db.Decimal(12, 2)
+  validDeliveryDate DateTime?
+}
+
+model OutboundOrder {
+  id           String              @id @default(cuid())
+  outboundNo   String              @unique
+  salesOrderId String?
+  salesOrder   SalesOrder?         @relation(fields: [salesOrderId], references: [id])
+  customerId   String
+  customer     Customer            @relation(fields: [customerId], references: [id])
+  outboundDate DateTime            @default(now())
+  status       OutboundStatus      @default(DRAFT)
+  remark       String?
+  createdAt    DateTime            @default(now())
+  items        OutboundOrderItem[]
+  returns      ReturnOrder[]
+}
+
+model OutboundOrderItem {
+  id              String        @id @default(cuid())
+  outboundOrderId String
+  outboundOrder   OutboundOrder @relation(fields: [outboundOrderId], references: [id])
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  stockBatchId    String
+  stockBatch      StockBatch    @relation(fields: [stockBatchId], references: [id])
+  quantity        Int
+  unitPrice       Decimal       @db.Decimal(12, 2)
+  returnItems     ReturnOrderItem[]
+}
+
+model ReturnOrder {
+  id              String            @id @default(cuid())
+  returnNo        String            @unique
+  outboundOrderId String
+  outboundOrder   OutboundOrder     @relation(fields: [outboundOrderId], references: [id])
+  customerId      String
+  customer        Customer          @relation(fields: [customerId], references: [id])
+  returnDate      DateTime          @default(now())
+  status          ReturnStatus      @default(PENDING)
+  reason          String
+  remark          String?
+  createdAt       DateTime          @default(now())
+  items           ReturnOrderItem[]
+}
+
+model ReturnOrderItem {
+  id                  String            @id @default(cuid())
+  returnOrderId       String
+  returnOrder         ReturnOrder       @relation(fields: [returnOrderId], references: [id])
+  outboundOrderItemId String
+  outboundOrderItem   OutboundOrderItem @relation(fields: [outboundOrderItemId], references: [id])
+  productId           String
+  product             Product           @relation(fields: [productId], references: [id])
+  stockBatchId        String
+  stockBatch          StockBatch        @relation(fields: [stockBatchId], references: [id])
+  quantity            Int
+}
+
+model ProductExternalCode {
+  id           String   @id @default(cuid())
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id])
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  externalCode String
+  externalName String?
+  remark       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([customerId, externalCode])
+  @@index([productId])
+}
+
+model StockBatch {
+  id                  String             @id @default(cuid())
+  productId           String
+  product             Product            @relation(fields: [productId], references: [id])
+  purchaseOrderItemId String?            @unique
+  purchaseOrderItem   PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id])
+  sourceType          BatchSource        @default(PURCHASE)
+  batchNo             String
+  productionDate      DateTime?
+  expiryDate          DateTime
+  initialQuantity     Int
+  currentQuantity     Int
+  unitCost            Decimal            @db.Decimal(12, 2)
+  createdAt           DateTime           @default(now())
+  outboundItems       OutboundOrderItem[]
+  returnItems         ReturnOrderItem[]
+  exchangeReturnItems ExchangeReturnItem[]
+  exchangeOutItems    ExchangeOutItem[]
+  movements           StockMovement[]
+
+  @@index([productId, expiryDate])
+}
+
+model StockMovement {
+  id           String       @id @default(cuid())
+  productId    String
+  product      Product      @relation(fields: [productId], references: [id])
+  stockBatchId String
+  stockBatch   StockBatch   @relation(fields: [stockBatchId], references: [id])
+  type         MovementType
+  quantity     Int
+  refNo        String?
+  note         String?
+  createdAt    DateTime     @default(now())
+
+  @@index([productId, createdAt])
+}
+
+model ExchangeOrder {
+  id           String              @id @default(cuid())
+  exchangeNo   String              @unique
+  salesOrderId String?
+  salesOrder   SalesOrder?         @relation(fields: [salesOrderId], references: [id])
+  customerId   String
+  customer     Customer            @relation(fields: [customerId], references: [id])
+  exchangeDate DateTime            @default(now())
+  inboundStatus  ExchangeInboundStatus  @default(PENDING)
+  outboundStatus ExchangeOutboundStatus @default(PENDING)
+  reason       String
+  remark       String?
+  createdAt    DateTime            @default(now())
+  returnItems  ExchangeReturnItem[]
+  outItems     ExchangeOutItem[]
+}
+
+model ExchangeReturnItem {
+  id              String        @id @default(cuid())
+  exchangeOrderId String
+  exchangeOrder   ExchangeOrder @relation(fields: [exchangeOrderId], references: [id])
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  stockBatchId    String
+  stockBatch      StockBatch    @relation(fields: [stockBatchId], references: [id])
+  quantity        Int
+
+  @@index([exchangeOrderId])
+}
+
+model ExchangeOutItem {
+  id              String        @id @default(cuid())
+  exchangeOrderId String
+  exchangeOrder   ExchangeOrder @relation(fields: [exchangeOrderId], references: [id])
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  stockBatchId    String
+  stockBatch      StockBatch    @relation(fields: [stockBatchId], references: [id])
+  quantity        Int
+  unitPrice       Decimal       @db.Decimal(12, 2) @default(0)
+
+  @@index([exchangeOrderId])
+}

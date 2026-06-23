@@ -1,0 +1,12 @@
+.next
+node_modules
+.env
+.env*.local
+.agents
+.codex
+.playwright-cli
+dist
+coverage
+*.log
+*.tsbuildinfo
+*.zip
