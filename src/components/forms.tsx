@@ -1424,7 +1424,7 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
   const selectedOrder = orders.find((order) => order.id === selectedOrderId);
   const lockedToOrder = Boolean(defaultOrderId || draft);
   const [allocations, setAllocations] = useState<Record<string, number>>({});
-  const [expandedProducts, setExpandedProducts] = useState<Record<string, boolean>>({});
+  const [batchPickerProductId, setBatchPickerProductId] = useState<string | null>(null);
 
   function allocationKey(productId: string, batchId: string) {
     return `${productId}:${batchId}`;
@@ -1437,6 +1437,22 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
 
   function allocatedQuantity(productId: string) {
     return Object.entries(allocations).reduce((sum, [key, quantity]) => (key.startsWith(`${productId}:`) ? sum + quantity : sum), 0);
+  }
+
+  function selectedBatchForProduct(productId: string) {
+    const itemBatches = batches.filter((batch) => batch.productId === productId && batch.currentQuantity > 0);
+    return itemBatches.find((batch) => (allocations[allocationKey(productId, batch.id)] ?? 0) > 0) ?? itemBatches[0];
+  }
+
+  function chooseBatch(productId: string, batchId: string, targetQuantity: number) {
+    const batch = batches.find((item) => item.id === batchId);
+    const quantity = Math.min(Math.max(0, Math.floor(targetQuantity || 0)), batch?.currentQuantity ?? targetQuantity);
+    setAllocations((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${productId}:`)));
+      next[allocationKey(productId, batchId)] = quantity;
+      return next;
+    });
+    setBatchPickerProductId(null);
   }
 
   function suggestedAllocations(order: ShippableOrder | undefined) {
@@ -1465,7 +1481,7 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
       return;
     }
     setAllocations(suggestedAllocations(selectedOrder));
-    setExpandedProducts({});
+    setBatchPickerProductId(null);
   }, [selectedOrderId, draft?.id]);
 
   return (
@@ -1513,77 +1529,76 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--line)]">
-              {selectedOrder.items.flatMap((item) => {
+              {selectedOrder.items.map((item) => {
                 const itemBatches = batches.filter((batch) => batch.productId === item.productId && batch.currentQuantity > 0);
                 const allocated = allocatedQuantity(item.productId);
                 const shortage = Math.max(0, item.quantity - allocated);
-                const expanded = Boolean(expandedProducts[item.productId]);
-                const visibleBatches = expanded ? itemBatches : itemBatches.filter((batch) => (allocations[allocationKey(item.productId, batch.id)] ?? 0) > 0);
+                const batch = selectedBatchForProduct(item.productId);
+                const quantity = batch ? (allocations[allocationKey(item.productId, batch.id)] ?? 0) : 0;
                 if (itemBatches.length === 0) {
-                  return [
+                  return (
                     <tr key={item.productId}>
                       <td className="py-3 font-medium">{item.productCode} - {item.productName}</td>
                       <td className="py-3">{item.orderedQuantity}</td>
                       <td className="py-3">¥{item.unitPrice.toFixed(2)}</td>
                       <td className="py-3">{item.validDeliveryDate}</td>
                       <td className="py-3 text-[var(--ink-soft)]" colSpan={4}>该商品没有可用批次库存。</td>
-                    </tr>,
-                  ];
-                }
-                return visibleBatches.map((batch, batchIndex) => {
-                  const key = allocationKey(item.productId, batch.id);
-                  const quantity = allocations[key] ?? 0;
-                  const firstRow = batchIndex === 0;
-                  return (
-                    <tr key={`${item.productId}-${batch.id}`} className={!firstRow ? "bg-[#fbfaf3]" : ""}>
-                      <td className="py-3">
-                        {firstRow ? (
-                          <div>
-                            <div className="font-medium text-[var(--foreground)]">{item.productCode} - {item.productName}</div>
-                            <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                              <span className="rounded-full bg-[#e3efe9] px-2 py-1 font-semibold text-[var(--leaf)]">已分配 {allocated}</span>
-                              {shortage > 0 ? <span className="rounded-full bg-[#fff2dd] px-2 py-1 font-semibold text-[var(--amber)]">还差 {shortage}</span> : null}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-[var(--ink-soft)]">其它批次</span>
-                        )}
-                      </td>
-                      <td className="py-3">{firstRow ? item.orderedQuantity : ""}</td>
-                      <td className="py-3">{firstRow ? `¥${item.unitPrice.toFixed(2)}` : ""}</td>
-                      <td className="py-3">{firstRow ? item.validDeliveryDate : ""}</td>
-                      <td className="py-3">
-                        <div className="font-mono text-xs">{batch.batchNo}</div>
-                        <div className="mt-1 text-xs text-[var(--ink-soft)]">{batch.sourceType === "INITIAL" ? "初始化" : "采购入库"} / {batch.expiryDate}</div>
-                      </td>
-                      <td className="py-3">{batch.currentQuantity}</td>
-                      <td className="py-3">
-                        <input name="productId" type="hidden" value={quantity > 0 ? item.productId : ""} />
-                        <input name="stockBatchId" type="hidden" value={quantity > 0 ? batch.id : ""} />
-                        <input
-                          className="focus-ring h-9 w-24 rounded-md border border-[var(--line)] px-2"
-                          max={batch.currentQuantity}
-                          min={0}
-                          name="quantity"
-                          type="number"
-                          value={quantity}
-                          onChange={(event) => setAllocation(item.productId, batch.id, Number(event.target.value))}
-                        />
-                      </td>
-                      <td className="py-3">
-                        {firstRow && itemBatches.length > visibleBatches.length ? (
-                          <button
-                            className="focus-ring h-9 rounded-md border border-[var(--line)] px-3 text-sm font-semibold text-[var(--leaf)]"
-                            type="button"
-                            onClick={() => setExpandedProducts((current) => ({ ...current, [item.productId]: !expanded }))}
-                          >
-                            {expanded ? "收起" : `其它批次 ${itemBatches.length - visibleBatches.length}`}
-                          </button>
-                        ) : null}
-                      </td>
                     </tr>
                   );
-                });
+                }
+                return (
+                  <tr key={item.productId}>
+                    <td className="py-3">
+                      <div>
+                        <div className="font-medium text-[var(--foreground)]">{item.productCode} - {item.productName}</div>
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-full bg-[#e3efe9] px-2 py-1 font-semibold text-[var(--leaf)]">已分配 {allocated}</span>
+                          {shortage > 0 ? <span className="rounded-full bg-[#fff2dd] px-2 py-1 font-semibold text-[var(--amber)]">还差 {shortage}</span> : null}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3">{item.orderedQuantity}</td>
+                    <td className="py-3">¥{item.unitPrice.toFixed(2)}</td>
+                    <td className="py-3">{item.validDeliveryDate}</td>
+                    <td className="py-3">
+                      {batch ? (
+                        <>
+                          <div className="font-mono text-xs">{batch.batchNo}</div>
+                          <div className="mt-1 text-xs text-[var(--ink-soft)]">{batch.sourceType === "INITIAL" ? "初始化" : "采购入库"} / {batch.expiryDate}</div>
+                        </>
+                      ) : (
+                        <span className="text-[var(--ink-soft)]">未选择</span>
+                      )}
+                    </td>
+                    <td className="py-3">{batch?.currentQuantity ?? "-"}</td>
+                    <td className="py-3">
+                      {batch ? (
+                        <>
+                          <input name="productId" type="hidden" value={quantity > 0 ? item.productId : ""} />
+                          <input name="stockBatchId" type="hidden" value={quantity > 0 ? batch.id : ""} />
+                          <input
+                            className="focus-ring h-9 w-24 rounded-md border border-[var(--line)] px-2"
+                            max={batch.currentQuantity}
+                            min={0}
+                            name="quantity"
+                            type="number"
+                            value={quantity}
+                            onChange={(event) => setAllocation(item.productId, batch.id, Number(event.target.value))}
+                          />
+                        </>
+                      ) : null}
+                    </td>
+                    <td className="py-3">
+                      <button
+                        className="focus-ring h-9 rounded-md border border-[var(--line)] px-3 text-sm font-semibold text-[var(--leaf)]"
+                        type="button"
+                        onClick={() => setBatchPickerProductId(item.productId)}
+                      >
+                        选择批次
+                      </button>
+                    </td>
+                  </tr>
+                );
               })}
             </tbody>
           </table>
@@ -1591,6 +1606,70 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
       ) : (
         <div className="rounded-md border border-dashed border-[var(--line)] p-4 text-sm text-[var(--ink-soft)]">暂无待出库订单。</div>
       )}
+      {batchPickerProductId ? (() => {
+        const item = selectedOrder?.items.find((orderItem) => orderItem.productId === batchPickerProductId);
+        const itemBatches = batches.filter((batch) => batch.productId === batchPickerProductId && batch.currentQuantity > 0);
+        if (!item) return null;
+
+        return (
+          <div className="fixed inset-0 z-[60] grid place-items-center bg-black/35 p-4">
+            <section className="w-full max-w-3xl overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--paper)] shadow-xl">
+              <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-4">
+                <div>
+                  <h3 className="text-base font-semibold">选择出库批次</h3>
+                  <p className="mt-1 text-sm text-[var(--ink-soft)]">{item.productCode} - {item.productName}</p>
+                </div>
+                <button
+                  className="focus-ring rounded-md border border-[var(--line)] bg-white px-3 py-1.5 text-sm font-semibold text-[var(--leaf)]"
+                  type="button"
+                  onClick={() => setBatchPickerProductId(null)}
+                >
+                  关闭
+                </button>
+              </div>
+              <div className="max-h-[60vh] overflow-auto p-5">
+                {itemBatches.length > 0 ? (
+                  <table className="w-full min-w-[680px] text-left text-sm">
+                    <thead className="text-xs text-[var(--ink-soft)]">
+                      <tr>
+                        <th className="py-2">批号</th>
+                        <th className="py-2">来源</th>
+                        <th className="py-2">允收日</th>
+                        <th className="py-2">可用库存</th>
+                        <th className="py-2">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--line)]">
+                      {itemBatches.map((batch) => {
+                        const current = (allocations[allocationKey(item.productId, batch.id)] ?? 0) > 0;
+                        return (
+                          <tr key={batch.id}>
+                            <td className="py-3 font-mono text-xs">{batch.batchNo}</td>
+                            <td className="py-3">{batch.sourceType === "INITIAL" ? "初始化" : "采购入库"}</td>
+                            <td className="py-3">{batch.expiryDate}</td>
+                            <td className="py-3">{batch.currentQuantity}</td>
+                            <td className="py-3">
+                              <button
+                                className="focus-ring h-9 rounded-md bg-[var(--leaf)] px-3 text-sm font-semibold text-white"
+                                type="button"
+                                onClick={() => chooseBatch(item.productId, batch.id, allocatedQuantity(item.productId) || item.quantity)}
+                              >
+                                {current ? "已选择" : "选择"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="rounded-md border border-dashed border-[var(--line)] p-5 text-center text-sm text-[var(--ink-soft)]">该商品没有可用批次库存。</div>
+                )}
+              </div>
+            </section>
+          </div>
+        );
+      })() : null}
       <TextArea label="备注" name="remark" defaultValue={draft?.remark} />
     </ManagedForm>
   );
