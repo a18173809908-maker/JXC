@@ -1498,107 +1498,95 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
         <Field label="出库日期" name="outboundDate" type="date" required={false} defaultValue={toDateInputValue(draft?.outboundDate)} />
       </div>
       {selectedOrder ? (
-        <div className="grid gap-4">
-          <div className="rounded-md border border-[var(--line)] bg-white p-3">
-            <h3 className="mb-3 font-semibold text-[var(--foreground)]">订单商品</h3>
-            <div className="overflow-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="text-xs text-[var(--ink-soft)]">
-                  <tr>
-                    <th className="py-2">商品</th>
-                    <th className="py-2">订单数量</th>
-                    <th className="py-2">单价</th>
-                    <th className="py-2">有效送货日</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--line)]">
-                  {selectedOrder.items.map((item) => (
+        <div className="overflow-auto rounded-md border border-[var(--line)] bg-white p-3">
+          <table className="w-full min-w-[1120px] text-left text-sm">
+            <thead className="text-xs text-[var(--ink-soft)]">
+              <tr>
+                <th className="py-2">商品</th>
+                <th className="py-2">订单数量</th>
+                <th className="py-2">单价</th>
+                <th className="py-2">有效送货日</th>
+                <th className="py-2">出库批次</th>
+                <th className="py-2">可用库存</th>
+                <th className="py-2">本次出库</th>
+                <th className="py-2">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--line)]">
+              {selectedOrder.items.flatMap((item) => {
+                const itemBatches = batches.filter((batch) => batch.productId === item.productId && batch.currentQuantity > 0);
+                const allocated = allocatedQuantity(item.productId);
+                const shortage = Math.max(0, item.quantity - allocated);
+                const expanded = Boolean(expandedProducts[item.productId]);
+                const visibleBatches = expanded ? itemBatches : itemBatches.filter((batch) => (allocations[allocationKey(item.productId, batch.id)] ?? 0) > 0);
+                if (itemBatches.length === 0) {
+                  return [
                     <tr key={item.productId}>
-                      <td className="py-2 font-medium">{item.productCode} - {item.productName}</td>
-                      <td className="py-2">{item.orderedQuantity}</td>
-                      <td className="py-2">¥{item.unitPrice.toFixed(2)}</td>
-                      <td className="py-2">{item.validDeliveryDate}</td>
+                      <td className="py-3 font-medium">{item.productCode} - {item.productName}</td>
+                      <td className="py-3">{item.orderedQuantity}</td>
+                      <td className="py-3">¥{item.unitPrice.toFixed(2)}</td>
+                      <td className="py-3">{item.validDeliveryDate}</td>
+                      <td className="py-3 text-[var(--ink-soft)]" colSpan={4}>该商品没有可用批次库存。</td>
+                    </tr>,
+                  ];
+                }
+                return visibleBatches.map((batch, batchIndex) => {
+                  const key = allocationKey(item.productId, batch.id);
+                  const quantity = allocations[key] ?? 0;
+                  const firstRow = batchIndex === 0;
+                  return (
+                    <tr key={`${item.productId}-${batch.id}`} className={!firstRow ? "bg-[#fbfaf3]" : ""}>
+                      <td className="py-3">
+                        {firstRow ? (
+                          <div>
+                            <div className="font-medium text-[var(--foreground)]">{item.productCode} - {item.productName}</div>
+                            <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                              <span className="rounded-full bg-[#e3efe9] px-2 py-1 font-semibold text-[var(--leaf)]">已分配 {allocated}</span>
+                              {shortage > 0 ? <span className="rounded-full bg-[#fff2dd] px-2 py-1 font-semibold text-[var(--amber)]">还差 {shortage}</span> : null}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-[var(--ink-soft)]">其它批次</span>
+                        )}
+                      </td>
+                      <td className="py-3">{firstRow ? item.orderedQuantity : ""}</td>
+                      <td className="py-3">{firstRow ? `¥${item.unitPrice.toFixed(2)}` : ""}</td>
+                      <td className="py-3">{firstRow ? item.validDeliveryDate : ""}</td>
+                      <td className="py-3">
+                        <div className="font-mono text-xs">{batch.batchNo}</div>
+                        <div className="mt-1 text-xs text-[var(--ink-soft)]">{batch.sourceType === "INITIAL" ? "初始化" : "采购入库"} / {batch.expiryDate}</div>
+                      </td>
+                      <td className="py-3">{batch.currentQuantity}</td>
+                      <td className="py-3">
+                        <input name="productId" type="hidden" value={quantity > 0 ? item.productId : ""} />
+                        <input name="stockBatchId" type="hidden" value={quantity > 0 ? batch.id : ""} />
+                        <input
+                          className="focus-ring h-9 w-24 rounded-md border border-[var(--line)] px-2"
+                          max={batch.currentQuantity}
+                          min={0}
+                          name="quantity"
+                          type="number"
+                          value={quantity}
+                          onChange={(event) => setAllocation(item.productId, batch.id, Number(event.target.value))}
+                        />
+                      </td>
+                      <td className="py-3">
+                        {firstRow && itemBatches.length > visibleBatches.length ? (
+                          <button
+                            className="focus-ring h-9 rounded-md border border-[var(--line)] px-3 text-sm font-semibold text-[var(--leaf)]"
+                            type="button"
+                            onClick={() => setExpandedProducts((current) => ({ ...current, [item.productId]: !expanded }))}
+                          >
+                            {expanded ? "收起" : `其它批次 ${itemBatches.length - visibleBatches.length}`}
+                          </button>
+                        ) : null}
+                      </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          {selectedOrder.items.map((item) => {
-            const itemBatches = batches.filter((batch) => batch.productId === item.productId && batch.currentQuantity > 0);
-            const allocated = allocatedQuantity(item.productId);
-            const shortage = Math.max(0, item.quantity - allocated);
-            const expanded = Boolean(expandedProducts[item.productId]);
-            const visibleBatches = expanded ? itemBatches : itemBatches.filter((batch) => (allocations[allocationKey(item.productId, batch.id)] ?? 0) > 0);
-            return (
-              <div className="rounded-md border border-[var(--line)] bg-white p-3" key={item.productId}>
-                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <h3 className="font-semibold text-[var(--foreground)]">{item.productCode} - {item.productName}</h3>
-                    <p className="text-xs text-[var(--ink-soft)]">已默认选中一批出库批次；可直接修改数量，也可以展开选择其它批次。</p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                      <span className="rounded-full bg-[#e3efe9] px-2 py-1 font-semibold text-[var(--leaf)]">应出 {item.quantity}</span>
-                      <span className="rounded-full bg-[#e3efe9] px-2 py-1 font-semibold text-[var(--leaf)]">已分配 {allocated}</span>
-                      {shortage > 0 ? <span className="rounded-full bg-[#fff2dd] px-2 py-1 font-semibold text-[var(--amber)]">还差 {shortage}</span> : null}
-                    </div>
-                  </div>
-                  {itemBatches.length > visibleBatches.length ? (
-                    <button
-                      className="focus-ring h-9 rounded-md border border-[var(--line)] px-3 text-sm font-semibold text-[var(--leaf)]"
-                      type="button"
-                      onClick={() => setExpandedProducts((current) => ({ ...current, [item.productId]: !expanded }))}
-                    >
-                      {expanded ? "收起其它批次" : `选择其它批次 ${itemBatches.length - visibleBatches.length}`}
-                    </button>
-                  ) : null}
-                </div>
-                {itemBatches.length > 0 ? (
-                  <div className="overflow-auto">
-                    <table className="w-full min-w-[720px] text-left text-sm">
-                      <thead className="text-xs text-[var(--ink-soft)]">
-                        <tr>
-                          <th className="py-2">出库批次</th>
-                          <th className="py-2">批次来源</th>
-                          <th className="py-2">允收日</th>
-                          <th className="py-2">可用库存</th>
-                          <th className="py-2">本次出库</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--line)]">
-                        {visibleBatches.map((batch) => {
-                          const key = allocationKey(item.productId, batch.id);
-                          const quantity = allocations[key] ?? 0;
-                          return (
-                            <tr key={batch.id}>
-                              <td className="py-2 font-mono text-xs">{batch.batchNo}</td>
-                              <td className="py-2">{batch.sourceType === "INITIAL" ? "初始化" : "采购入库"}</td>
-                              <td className="py-2">{batch.expiryDate}</td>
-                              <td className="py-2">{batch.currentQuantity}</td>
-                              <td className="py-2">
-                                <input name="productId" type="hidden" value={quantity > 0 ? item.productId : ""} />
-                                <input name="stockBatchId" type="hidden" value={quantity > 0 ? batch.id : ""} />
-                                <input
-                                  className="focus-ring h-9 w-28 rounded-md border border-[var(--line)] px-2"
-                                  max={batch.currentQuantity}
-                                  min={0}
-                                  name="quantity"
-                                  type="number"
-                                  value={quantity}
-                                  onChange={(event) => setAllocation(item.productId, batch.id, Number(event.target.value))}
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="rounded-md border border-dashed border-[var(--line)] p-4 text-sm text-[var(--ink-soft)]">该商品没有可用批次库存。</div>
-                )}
-              </div>
-            );
-          })}
+                  );
+                });
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="rounded-md border border-dashed border-[var(--line)] p-4 text-sm text-[var(--ink-soft)]">暂无待出库订单。</div>
