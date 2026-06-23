@@ -1420,7 +1420,9 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
   const defaultSelectedOrderId = orders.some((order) => order.id === defaultOrderId) ? defaultOrderId : orders[0]?.id;
   const [selectedOrderId, setSelectedOrderId] = useState(draft?.salesOrderId ?? defaultSelectedOrderId ?? "");
   const selectedOrder = orders.find((order) => order.id === selectedOrderId);
+  const lockedToOrder = Boolean(defaultOrderId || draft);
   const [allocations, setAllocations] = useState<Record<string, number>>({});
+  const [expandedProducts, setExpandedProducts] = useState<Record<string, boolean>>({});
 
   function allocationKey(productId: string, batchId: string) {
     return `${productId}:${batchId}`;
@@ -1461,27 +1463,35 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
       return;
     }
     setAllocations(suggestedAllocations(selectedOrder));
+    setExpandedProducts({});
   }, [selectedOrderId, draft?.id]);
 
   return (
     <ManagedForm action={shipSalesOrder} submitLabel="保存出库单" successHref="/?section=sales" successLabel="返回销售订单">
       <input name="outboundOrderId" type="hidden" value={draft?.id ?? selectedOrder?.draftOutboundId ?? ""} />
-      <label className="grid gap-1.5 text-sm text-[var(--ink-soft)]">
-        <span>待出库订单</span>
-        <select
-          className="focus-ring h-10 rounded-md border border-[var(--line)] bg-white px-3 text-[var(--foreground)]"
-          name="salesOrderId"
-          value={selectedOrderId}
-          onChange={(event) => {
-            setSelectedOrderId(event.target.value);
-          }}
-          disabled={Boolean(draft)}
-        >
-          {orders.map((order) => (
-            <option key={order.id} value={order.id}>{order.name}</option>
-          ))}
-        </select>
-      </label>
+      {lockedToOrder ? (
+        <div className="rounded-md border border-[var(--line)] bg-white p-3">
+          <input name="salesOrderId" type="hidden" value={selectedOrderId} />
+          <div className="text-xs text-[var(--ink-soft)]">当前订单</div>
+          <div className="mt-1 font-semibold text-[var(--foreground)]">{selectedOrder?.name ?? "订单不存在或不可出库"}</div>
+        </div>
+      ) : (
+        <label className="grid gap-1.5 text-sm text-[var(--ink-soft)]">
+          <span>待出库订单</span>
+          <select
+            className="focus-ring h-10 rounded-md border border-[var(--line)] bg-white px-3 text-[var(--foreground)]"
+            name="salesOrderId"
+            value={selectedOrderId}
+            onChange={(event) => {
+              setSelectedOrderId(event.target.value);
+            }}
+          >
+            {orders.map((order) => (
+              <option key={order.id} value={order.id}>{order.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="grid gap-3 md:grid-cols-2">
         <Field label="出库日期" name="outboundDate" type="date" required={false} defaultValue={toDateInputValue(draft?.outboundDate)} />
       </div>
@@ -1490,28 +1500,45 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
           {selectedOrder.items.map((item) => {
             const itemBatches = batches.filter((batch) => batch.productId === item.productId && batch.currentQuantity > 0);
             const allocated = allocatedQuantity(item.productId);
+            const shortage = Math.max(0, item.quantity - allocated);
+            const expanded = Boolean(expandedProducts[item.productId]);
+            const visibleBatches = expanded ? itemBatches : itemBatches.filter((batch) => (allocations[allocationKey(item.productId, batch.id)] ?? 0) > 0);
             return (
               <div className="rounded-md border border-[var(--line)] bg-white p-3" key={item.productId}>
-                <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h3 className="font-semibold text-[var(--foreground)]">{item.productCode} - {item.productName}</h3>
-                    <p className="text-xs text-[var(--ink-soft)]">订单原值 {item.orderedQuantity}，本次出库 {allocated}，可按实际情况修改</p>
+                    <p className="text-xs text-[var(--ink-soft)]">系统已按允收日最早批次分配；正常直接保存，需要改批次时再展开调整。</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full bg-[#e3efe9] px-2 py-1 font-semibold text-[var(--leaf)]">应出 {item.quantity}</span>
+                      <span className="rounded-full bg-[#e3efe9] px-2 py-1 font-semibold text-[var(--leaf)]">已分配 {allocated}</span>
+                      {shortage > 0 ? <span className="rounded-full bg-[#fff2dd] px-2 py-1 font-semibold text-[var(--amber)]">还差 {shortage}</span> : null}
+                    </div>
                   </div>
+                  {itemBatches.length > visibleBatches.length ? (
+                    <button
+                      className="focus-ring h-9 rounded-md border border-[var(--line)] px-3 text-sm font-semibold text-[var(--leaf)]"
+                      type="button"
+                      onClick={() => setExpandedProducts((current) => ({ ...current, [item.productId]: !expanded }))}
+                    >
+                      {expanded ? "收起未选批次" : `显示其它批次 ${itemBatches.length - visibleBatches.length}`}
+                    </button>
+                  ) : null}
                 </div>
                 {itemBatches.length > 0 ? (
                   <div className="overflow-auto">
                     <table className="w-full min-w-[720px] text-left text-sm">
                       <thead className="text-xs text-[var(--ink-soft)]">
                         <tr>
-                          <th className="py-2">批号</th>
-                          <th className="py-2">来源</th>
+                          <th className="py-2">出库批次</th>
+                          <th className="py-2">批次来源</th>
                           <th className="py-2">允收日</th>
                           <th className="py-2">可用库存</th>
                           <th className="py-2">本次出库</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--line)]">
-                        {itemBatches.map((batch) => {
+                        {visibleBatches.map((batch) => {
                           const key = allocationKey(item.productId, batch.id);
                           const quantity = allocations[key] ?? 0;
                           return (
