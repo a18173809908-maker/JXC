@@ -420,29 +420,37 @@ function ManagedForm({
   action,
   children,
   submitLabel,
+  successActions,
   successHref,
   successLabel = "返回列表",
 }: {
   action: FormAction;
   children: React.ReactNode;
   submitLabel: string;
+  successActions?: (state: ActionState) => React.ReactNode;
   successHref?: string;
   successLabel?: string;
 }) {
   const [state, formAction] = useActionState(action, initialActionState);
 
   return (
-    <form action={formAction} className="grid gap-3">
-      {children}
-      {state.ok && successHref ? (
-        <Link className="focus-ring grid h-10 place-items-center rounded-md bg-[var(--leaf)] px-4 text-sm font-semibold text-white" href={successHref}>
-          {successLabel}
-        </Link>
-      ) : (
-        <Submit>{submitLabel}</Submit>
-      )}
+    <div className="grid gap-3">
+      <form action={formAction} className="grid gap-3">
+        {children}
+        {state.ok ? null : <Submit>{submitLabel}</Submit>}
+      </form>
+      {state.ok ? (
+        <div className={`grid gap-2 ${successActions ? "md:grid-cols-2" : ""}`}>
+          {successActions?.(state)}
+          {successHref ? (
+            <Link className="focus-ring grid h-10 place-items-center rounded-md bg-[var(--leaf)] px-4 text-sm font-semibold text-white" href={successHref}>
+              {successLabel}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
       <ActionMessage state={state} />
-    </form>
+    </div>
   );
 }
 
@@ -1485,7 +1493,13 @@ export function ShipOrderForm({ orders, batches, draft, defaultOrderId }: { orde
   }, [selectedOrderId, draft?.id]);
 
   return (
-    <ManagedForm action={shipSalesOrder} submitLabel="保存出库单" successHref="/?section=sales" successLabel="返回销售订单">
+    <ManagedForm
+      action={shipSalesOrder}
+      submitLabel="保存出库单"
+      successActions={(state) => (state.outboundOrderId ? <ConfirmOutboundForm id={state.outboundOrderId} /> : null)}
+      successHref="/?section=sales"
+      successLabel="返回销售订单"
+    >
       <input name="outboundOrderId" type="hidden" value={draft?.id ?? selectedOrder?.draftOutboundId ?? ""} />
       {lockedToOrder ? (
         <div className="rounded-md border border-[var(--line)] bg-white p-3">

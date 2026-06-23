@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 export type ActionState = {
   ok: boolean;
   message: string;
+  outboundOrderId?: string;
 };
 
 function text(formData: FormData, key: string) {
@@ -48,9 +49,9 @@ function orderNo(prefix: string) {
   return `${prefix}${stamp}${Math.floor(Math.random() * 90 + 10)}`;
 }
 
-function success(message: string): ActionState {
+function success(message: string, extra?: Omit<ActionState, "ok" | "message">): ActionState {
   revalidatePath("/");
-  return { ok: true, message };
+  return { ok: true, message, ...extra };
 }
 
 function failure(error: unknown): ActionState {
@@ -579,7 +580,7 @@ export async function shipSalesOrder(_state: ActionState, formData: FormData): P
 
     if (allocations.length === 0) throw new Error("请至少选择一个出库批次");
 
-    const outboundNo = await db.$transaction(async (tx) => {
+    const savedOutbound = await db.$transaction(async (tx) => {
       const order = await tx.salesOrder.findUnique({
         where: { id: salesOrderId },
         include: { items: true, outbounds: true },
@@ -636,10 +637,10 @@ export async function shipSalesOrder(_state: ActionState, formData: FormData): P
         });
       }
 
-      return outbound.outboundNo;
+      return { id: outbound.id, outboundNo: outbound.outboundNo };
     });
 
-    return success(`出库单 ${outboundNo} 已保存，确认后才会扣库存`);
+    return success(`出库单 ${savedOutbound.outboundNo} 已保存，确认后才会扣库存`, { outboundOrderId: savedOutbound.id });
   } catch (error) {
     return failure(error);
   }
